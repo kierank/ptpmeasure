@@ -109,15 +109,19 @@ void got_packet_2110_video(u_char *user, const struct pcap_pkthdr *header, const
     uint8_t *ip_pkt = ethernet_payload((uint8_t*)packet);
     uint8_t *udp_pkt = ip_payload(ip_pkt);
     uint8_t *rtp_pkt = udp_payload(udp_pkt);
+    bool first_pkt = false;
 
     static bool prev_marker = false;
     bool marker = rtp_check_marker(rtp_pkt);
 
     if (!prev_marker) {
         prev_marker = marker;
-        return;
+
+        if(!marker)
+            return;
     }
     prev_marker = marker;
+    first_pkt = !marker;
 
     uint32_t rtp_timestamp = rtp_get_timestamp(rtp_pkt);
 
@@ -155,18 +159,20 @@ void got_packet_2110_video(u_char *user, const struct pcap_pkthdr *header, const
     if (time_for_log(time_buf))
         pcap_breakloop(pcap);
 
-    if (ideal_ptp_diff_ns > frame_time_ns / 2) {
-        printf("%s: First packet arrived %.3f ms before ideal, RTP-PTP offset %.3fus (%"PRId64" rtp).\n",
-                time_buf,
-                (frame_time_ns - ideal_ptp_diff_ns) / (1e6 * fps.num),
-                delta*1e6/90000, delta);
-    }
+    if (first_pkt) {
+        if (ideal_ptp_diff_ns > frame_time_ns / 2) {
+            printf("%s: First packet arrived %.3f ms before ideal, RTP-PTP offset %.3fus (%"PRId64" rtp).\n",
+                    time_buf,
+                    (frame_time_ns - ideal_ptp_diff_ns) / (1e6 * fps.num),
+                    delta*1e6/90000, delta);
+        }
 
-    else {
-        printf("%s: First Packet arrived %.3f ms after ideal,  RTP-PTP offset %.3fus (%"PRId64" rtp).\n",
-                time_buf,
-                ideal_ptp_diff_ns / (1e6 * fps.num),
-                delta*1e6/90000, delta);
+        else {
+            printf("%s: First Packet arrived %.3f ms after ideal,  RTP-PTP offset %.3fus (%"PRId64" rtp).\n",
+                    time_buf,
+                    ideal_ptp_diff_ns / (1e6 * fps.num),
+                    delta*1e6/90000, delta);
+        }
     }
 }
 
